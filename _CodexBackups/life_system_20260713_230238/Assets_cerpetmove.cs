@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text;
 using UnityEngine;
 using TMPro;
 
@@ -16,7 +15,11 @@ public class CarpetMove : MonoBehaviour
     public float autoReturnToTitleSeconds = 30f;
     public AudioSource tutorialAmbientSource;
     private float goalEnteredAt;
-public ShoulderInput shoulderInput;
+
+    public float scoreCooldownSeconds = 1f;
+    private float nextScoreAllowedTime;
+
+    public ShoulderInput shoulderInput;
     public float shoulderPower = 10f;
     public ShieldController shieldController;
     public GameObject tenkokuDynamicSky;
@@ -26,13 +29,12 @@ public ShoulderInput shoulderInput;
     public AudioClip hitSound1;
     public AudioClip hitSound2;
 
-    [Header("Life Settings")]
-    public float maxLife = 30f;
-    [Range(0.5f, 3f)]
-    public float defaultHitDamage = 1f;
+    [Header("Score Settings")]
+    public int dodgeScore = 100;
+    public int hitEdgeScore = 99;
     [Range(0f, 1f)]
-    public float minimumHitFeedbackIntensity = 0.55f;
-    private float currentLife;
+    public float minimumHitFeedbackIntensity = 0.08f;
+    private int currentScore;
 
     public TMP_Text hpText;
     private bool hpTextVisible;
@@ -52,13 +54,17 @@ public float hitObjectRemainSeconds = 2.0f;
 
     public bool isGameOver = false;
     private bool waitingForGoalRestart;
-private bool returnedToTitleAfterGoal;
-void Start()
+    private bool hitScoreAddedThisFrame;
+    private bool returnedToTitleAfterGoal;
+    private float lastDodgeScoreZ = -999999f;
+    public float sameDodgeGroupZDistance = 5f;
+
+    void Start()
     {
         Time.timeScale = 1f;
-        currentLife = Mathf.Max(0.5f, maxLife);
 
-if (gameOverText != null)
+
+        if (gameOverText != null)
         {
             gameOverText.SetActive(false);
         }
@@ -75,7 +81,7 @@ if (gameOverText != null)
 
         if (hpText != null)
         {
-            UpdateLifeText();
+            hpText.text = "Score : " + currentScore;
             hpText.gameObject.SetActive(false);
             hpTextVisible = false;
         }
@@ -93,7 +99,8 @@ if (gameOverText != null)
 
     void Update()
     {
-if (waitingForGoalRestart)
+        hitScoreAddedThisFrame = false;
+        if (waitingForGoalRestart)
         {
             HandleGoalRestartInput();
             return;
@@ -163,17 +170,25 @@ if (waitingForGoalRestart)
             EnterGoalState();
         }
     }
-    void ApplyDamage(float damage)
+
+    void AddScore(int scoreToAdd)
     {
-        damage = Mathf.Clamp(damage, 0.5f, 3f);
-
-        currentLife = Mathf.Max(0f, currentLife - damage);
-        UpdateLifeText();
-
-        if (currentLife <= 0f)
+        if (scoreToAdd <= 0)
         {
-            GameOver();
+            return;
         }
+
+        if (Time.unscaledTime < nextScoreAllowedTime)
+        {
+            return;
+        }
+
+        nextScoreAllowedTime = Time.unscaledTime + scoreCooldownSeconds;
+
+        currentScore += scoreToAdd;
+        UpdateScoreText();
+
+        Debug.Log("Score : " + currentScore);
     }
 
     public void HandleBulletHit(GameObject bulletObject)
@@ -201,8 +216,17 @@ if (waitingForGoalRestart)
         }
 
         PlayHitSound(bulletRoot);
+
         if (shieldController != null && shieldController.IsShieldActive)
         {
+            if (MagicCarpetGameFlow.IsMainGameStarted)
+            {
+                var shieldScore = IsCircleChallengeObstacle(bulletRoot)
+                    ? MagicCarpetGameFlow.ConsumeCircleChallengeShieldScore(dodgeScore)
+                    : dodgeScore;
+                AddScore(shieldScore);
+            }
+
             DestroyBulletObject(bulletRoot);
             return;
         }
@@ -213,10 +237,16 @@ if (waitingForGoalRestart)
             PlayDamageFeedback(1f);
             return;
         }
-        var damage = runtime != null ? runtime.damage : defaultHitDamage;
-        ApplyDamage(damage);
 
-        PlayDamageFeedback(GetDamageFeedbackIntensity(damage));
+        int hitScore = IsCircleChallengeObstacle(bulletRoot) ? 0 : CalculateHitScore(bulletRoot);
+
+        if (!hitScoreAddedThisFrame)
+        {
+            AddScore(hitScore);
+            hitScoreAddedThisFrame = true;
+        }
+
+        PlayDamageFeedback(GetHitFeedbackIntensity(hitScore));
         DestroyBulletObject(bulletRoot);
     }
 
@@ -226,7 +256,21 @@ if (waitingForGoalRestart)
         {
             return;
         }
-        // Life mode: passing an obstacle does not change life.
+
+        if (IsCircleChallengeObstacle(bulletObject))
+        {
+            return;
+        }
+
+        float bulletZ = bulletObject.transform.position.z;
+
+        if (Mathf.Abs(bulletZ - lastDodgeScoreZ) <= sameDodgeGroupZDistance)
+        {
+            return;
+        }
+
+        lastDodgeScoreZ = bulletZ;
+        AddScore(dodgeScore);
     }
 
     void ReportTutorialBulletFailure(GameObject hitObject)
@@ -357,7 +401,7 @@ if (waitingForGoalRestart)
 
         hpText.gameObject.SetActive(shouldShow);
         hpTextVisible = shouldShow;
-        UpdateLifeText();
+        UpdateScoreText();
     }
 
     void EnsureParentsVisible(GameObject target)
@@ -369,65 +413,93 @@ if (waitingForGoalRestart)
             parent = parent.parent;
         }
     }
-    void UpdateLifeText()
+
+    void UpdateScoreText()
     {
         if (hpText != null)
         {
-            hpText.color = GetHpTextColor();
-            hpText.text = "HP: " + FormatLifeValue(currentLife) + "/" + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
+            hpText.text = "Score : " + currentScore;
         }
     }
 
-    Color32 GetHpTextColor()
+    int CalculateHitScore(GameObject hitObject)
     {
-        if (currentLife <= 5f)
+        var bounds = GetObjectBounds(hitObject);
+        if (!bounds.HasValue)
         {
-            return new Color32(235, 55, 55, 255);
+            return 0;
         }
 
-        if (currentLife <= 15f)
+        var halfWidth = Mathf.Max(0.01f, bounds.Value.extents.x);
+        var distanceFromCenterX = Mathf.Abs(transform.position.x - bounds.Value.center.x);
+        var ratioToEdge = Mathf.Clamp01(distanceFromCenterX / halfWidth);
+        return Mathf.Clamp(Mathf.RoundToInt(ratioToEdge * Mathf.Max(0, hitEdgeScore)), 0, 99);
+    }
+
+    bool IsCircleChallengeObstacle(GameObject hitObject)
+    {
+        return hitObject != null && hitObject.GetComponentInParent<CircleChallengeObstacle>() != null;
+    }
+
+    float GetHitFeedbackIntensity(int hitScore)
+    {
+        float maxHitScore = Mathf.Max(1f, Mathf.Min(99f, hitEdgeScore));
+        float scoreRatio = Mathf.Clamp01(hitScore / maxHitScore);
+        return Mathf.Lerp(1f, minimumHitFeedbackIntensity, scoreRatio);
+    }
+
+    Bounds? GetObjectBounds(GameObject target)
+    {
+        if (target == null)
         {
-            return new Color32(245, 205, 35, 255);
+            return null;
         }
 
-        return new Color32(30, 180, 70, 255);
-    }
-
-    string FormatLifeValue(float value)
-    {
-        return Mathf.Approximately(value % 1f, 0f) ? Mathf.RoundToInt(value).ToString() : value.ToString("0.0");
-    }
-
-    string BuildLifeHearts()
-    {
-        int totalHearts = Mathf.Max(1, Mathf.RoundToInt(maxLife));
-        int fullHearts = Mathf.Clamp(Mathf.FloorToInt(currentLife), 0, totalHearts);
-        bool hasHalfHeart = currentLife - fullHearts >= 0.5f && fullHearts < totalHearts;
-
-        var builder = new StringBuilder(totalHearts * 26);
-        for (int i = 0; i < totalHearts; i++)
+        Bounds? bounds = null;
+        foreach (var renderer in target.GetComponentsInChildren<Renderer>(true))
         {
-            if (i < fullHearts)
+            if (renderer == null || !renderer.enabled)
             {
-                builder.Append("<color=#ff4f6d>\u2665</color>");
+                continue;
             }
-            else if (i == fullHearts && hasHalfHeart)
+
+            if (!bounds.HasValue)
             {
-                builder.Append("<color=#ff9bad>\u2665</color>");
+                bounds = renderer.bounds;
             }
             else
             {
-                builder.Append("<color=#00000008>\u2665</color>");
+                var current = bounds.Value;
+                current.Encapsulate(renderer.bounds);
+                bounds = current;
             }
         }
 
-        return builder.ToString();
-    }
+        if (bounds.HasValue)
+        {
+            return bounds;
+        }
 
-    float GetDamageFeedbackIntensity(float damage)
-    {
-        float damageRatio = Mathf.InverseLerp(0.5f, 3f, Mathf.Clamp(damage, 0.5f, 3f));
-        return Mathf.Lerp(minimumHitFeedbackIntensity, 1f, damageRatio);
+        foreach (var collider in target.GetComponentsInChildren<Collider>(true))
+        {
+            if (collider == null || !collider.enabled)
+            {
+                continue;
+            }
+
+            if (!bounds.HasValue)
+            {
+                bounds = collider.bounds;
+            }
+            else
+            {
+                var current = bounds.Value;
+                current.Encapsulate(collider.bounds);
+                bounds = current;
+            }
+        }
+
+        return bounds;
     }
 
     IEnumerator ShowDamageObject()
@@ -501,11 +573,11 @@ if (waitingForGoalRestart)
     {
         returnedToTitleAfterGoal = true;
         isGameOver = false;
-        currentLife = Mathf.Max(0.5f, maxLife);
+        currentScore = 0;
 
         if (hpText != null)
         {
-            UpdateLifeText();
+            hpText.text = "Score : " + currentScore;
             hpText.gameObject.SetActive(false);
             hpTextVisible = false;
         }
@@ -556,16 +628,3 @@ if (waitingForGoalRestart)
         seSource.PlayOneShot(clip);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

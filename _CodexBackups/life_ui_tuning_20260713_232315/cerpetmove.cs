@@ -52,7 +52,8 @@ public float hitObjectRemainSeconds = 2.0f;
 
     public bool isGameOver = false;
     private bool waitingForGoalRestart;
-private bool returnedToTitleAfterGoal;
+    private bool hitDamageAppliedThisFrame;
+    private bool returnedToTitleAfterGoal;
 void Start()
     {
         Time.timeScale = 1f;
@@ -93,7 +94,8 @@ if (gameOverText != null)
 
     void Update()
     {
-if (waitingForGoalRestart)
+        hitDamageAppliedThisFrame = false;
+        if (waitingForGoalRestart)
         {
             HandleGoalRestartInput();
             return;
@@ -214,7 +216,12 @@ if (waitingForGoalRestart)
             return;
         }
         var damage = runtime != null ? runtime.damage : defaultHitDamage;
-        ApplyDamage(damage);
+
+        if (!hitDamageAppliedThisFrame)
+        {
+            ApplyDamage(damage);
+            hitDamageAppliedThisFrame = true;
+        }
 
         PlayDamageFeedback(GetDamageFeedbackIntensity(damage));
         DestroyBulletObject(bulletRoot);
@@ -223,6 +230,11 @@ if (waitingForGoalRestart)
     public void HandleBulletPassed(GameObject bulletObject)
     {
         if (bulletObject == null || !MagicCarpetGameFlow.IsMainGameStarted)
+        {
+            return;
+        }
+
+        if (IsCircleChallengeObstacle(bulletObject))
         {
             return;
         }
@@ -373,24 +385,9 @@ if (waitingForGoalRestart)
     {
         if (hpText != null)
         {
-            hpText.color = GetHpTextColor();
-            hpText.text = "HP: " + FormatLifeValue(currentLife) + "/" + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
+            hpText.richText = true;
+            hpText.text = "Life : " + FormatLifeValue(currentLife) + " / " + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
         }
-    }
-
-    Color32 GetHpTextColor()
-    {
-        if (currentLife <= 5f)
-        {
-            return new Color32(235, 55, 55, 255);
-        }
-
-        if (currentLife <= 15f)
-        {
-            return new Color32(245, 205, 35, 255);
-        }
-
-        return new Color32(30, 180, 70, 255);
     }
 
     string FormatLifeValue(float value)
@@ -417,17 +414,76 @@ if (waitingForGoalRestart)
             }
             else
             {
-                builder.Append("<color=#00000008>\u2665</color>");
+                builder.Append("<color=#666666>\u2661</color>");
             }
         }
 
         return builder.ToString();
     }
 
+
+    bool IsCircleChallengeObstacle(GameObject hitObject)
+    {
+        return hitObject != null && hitObject.GetComponentInParent<CircleChallengeObstacle>() != null;
+    }
     float GetDamageFeedbackIntensity(float damage)
     {
         float damageRatio = Mathf.InverseLerp(0.5f, 3f, Mathf.Clamp(damage, 0.5f, 3f));
         return Mathf.Lerp(minimumHitFeedbackIntensity, 1f, damageRatio);
+    }
+
+    Bounds? GetObjectBounds(GameObject target)
+    {
+        if (target == null)
+        {
+            return null;
+        }
+
+        Bounds? bounds = null;
+        foreach (var renderer in target.GetComponentsInChildren<Renderer>(true))
+        {
+            if (renderer == null || !renderer.enabled)
+            {
+                continue;
+            }
+
+            if (!bounds.HasValue)
+            {
+                bounds = renderer.bounds;
+            }
+            else
+            {
+                var current = bounds.Value;
+                current.Encapsulate(renderer.bounds);
+                bounds = current;
+            }
+        }
+
+        if (bounds.HasValue)
+        {
+            return bounds;
+        }
+
+        foreach (var collider in target.GetComponentsInChildren<Collider>(true))
+        {
+            if (collider == null || !collider.enabled)
+            {
+                continue;
+            }
+
+            if (!bounds.HasValue)
+            {
+                bounds = collider.bounds;
+            }
+            else
+            {
+                var current = bounds.Value;
+                current.Encapsulate(collider.bounds);
+                bounds = current;
+            }
+        }
+
+        return bounds;
     }
 
     IEnumerator ShowDamageObject()
@@ -556,10 +612,6 @@ if (waitingForGoalRestart)
         seSource.PlayOneShot(clip);
     }
 }
-
-
-
-
 
 
 

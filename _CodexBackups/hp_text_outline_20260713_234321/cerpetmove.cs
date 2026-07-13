@@ -373,24 +373,14 @@ if (waitingForGoalRestart)
     {
         if (hpText != null)
         {
-            hpText.color = GetHpTextColor();
-            hpText.text = "HP: " + FormatLifeValue(currentLife) + "/" + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
+            hpText.richText = true;
+            hpText.enableWordWrapping = false;
+            hpText.fontStyle |= FontStyles.Bold;
+            hpText.color = new Color32(30, 180, 70, 255);
+            hpText.outlineColor = Color.white;
+            hpText.outlineWidth = 0.2f;
+            hpText.text = "Life: " + FormatLifeValue(currentLife) + "/" + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
         }
-    }
-
-    Color32 GetHpTextColor()
-    {
-        if (currentLife <= 5f)
-        {
-            return new Color32(235, 55, 55, 255);
-        }
-
-        if (currentLife <= 15f)
-        {
-            return new Color32(245, 205, 35, 255);
-        }
-
-        return new Color32(30, 180, 70, 255);
     }
 
     string FormatLifeValue(float value)
@@ -417,7 +407,7 @@ if (waitingForGoalRestart)
             }
             else
             {
-                builder.Append("<color=#00000008>\u2665</color>");
+                builder.Append("<color=#00000000>\u2665</color>");
             }
         }
 
@@ -556,7 +546,6 @@ if (waitingForGoalRestart)
         seSource.PlayOneShot(clip);
     }
 }
-
 
 
 

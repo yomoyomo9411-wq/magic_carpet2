@@ -6,7 +6,6 @@ public class BallRuntimeController : MonoBehaviour
     public Vector3 velocity;
     public float destroyBehindDistance = 20f;
     public float touchCheckDistance = 10f;
-    public float damage = 1f;
 
     private CarpetMove carpet;
     private Collider[] ballColliders;
@@ -234,4 +233,3 @@ public class BallRuntimeController : MonoBehaviour
         return bounds;
     }
 }
-

@@ -36,6 +36,7 @@ public ShoulderInput shoulderInput;
 
     public TMP_Text hpText;
     private bool hpTextVisible;
+    private Material hpTextRuntimeMaterial;
     public GameObject goalText;
     public DamageFlash damageFlash;
 
@@ -373,8 +374,38 @@ if (waitingForGoalRestart)
     {
         if (hpText != null)
         {
-            hpText.color = GetHpTextColor();
+            ApplyHpTextStyle();
             hpText.text = "HP: " + FormatLifeValue(currentLife) + "/" + FormatLifeValue(maxLife) + "\n" + BuildLifeHearts();
+        }
+    }
+
+    void ApplyHpTextStyle()
+    {
+        hpText.richText = true;
+        hpText.enableWordWrapping = false;
+        hpText.fontStyle |= FontStyles.Bold;
+        hpText.color = GetHpTextColor();
+        hpText.outlineColor = Color.white;
+        hpText.outlineWidth = 0.35f;
+
+        if (hpTextRuntimeMaterial == null && hpText.fontSharedMaterial != null)
+        {
+            hpTextRuntimeMaterial = new Material(hpText.fontSharedMaterial);
+            hpText.fontMaterial = hpTextRuntimeMaterial;
+        }
+
+        var material = hpText.fontMaterial;
+        if (material != null)
+        {
+            if (material.HasProperty("_OutlineColor"))
+            {
+                material.SetColor("_OutlineColor", Color.white);
+            }
+
+            if (material.HasProperty("_OutlineWidth"))
+            {
+                material.SetFloat("_OutlineWidth", 0.35f);
+            }
         }
     }
 

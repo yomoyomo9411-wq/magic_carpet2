@@ -18,9 +18,6 @@ public class BallScheduleEntry
     [Tooltip("この障害物に当たった時に特殊SEを使う")]
     public bool useHitSound2;
 
-    [Tooltip("この障害物に当たった時に減るライフ。0.5から3の間で設定します")]
-    [Range(0.5f, 3f)]
-    public float damage = 1f;
     [Tooltip("球の大きさ")]
     [Min(0.1f)]
     public float scale = 2.5f;
@@ -372,7 +369,6 @@ public class BulletSpawner : MonoBehaviour
             runtime.velocity = ballVelocity;
             runtime.destroyBehindDistance = destroyBehindPlayerDistance;
 
-            runtime.damage = Mathf.Clamp(entry.damage, 0.5f, 3f);
             Destroy(ball, Mathf.Max(bulletLifeTime, activeSpawnDistance / entry.speed + 2f));
             return ball;
         }
@@ -469,9 +465,6 @@ public class ObstacleHitSoundMarker : MonoBehaviour
 {
     public bool useHitSound2;
 }
-
-
-
 
 
 

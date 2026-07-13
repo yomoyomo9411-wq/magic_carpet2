@@ -610,11 +610,6 @@ public class MagicCarpetGameFlow : MonoBehaviour
 
     private void ResolveMainStartObjects()
     {
-        if (mainStartObjectsResolved)
-        {
-            return;
-        }
-
         mainStartObjects.Clear();
 
         foreach (var obj in Resources.FindObjectsOfTypeAll<GameObject>())
@@ -626,13 +621,11 @@ public class MagicCarpetGameFlow : MonoBehaviour
 
             string name = obj.name.ToLower();
 
-            if (name.Contains("castle") || name.Contains("plane"))
+            if (name.Contains("castle"))
             {
                 mainStartObjects.Add(obj);
             }
         }
-
-        mainStartObjectsResolved = mainStartObjects.Count > 0;
 
         Debug.Log($"Main background objects found: {mainStartObjects.Count}");
     }
@@ -665,16 +658,6 @@ public class MagicCarpetGameFlow : MonoBehaviour
         if (target == null)
         {
             return;
-        }
-
-        if (visible)
-        {
-            var parent = target.transform.parent;
-            while (parent != null)
-            {
-                parent.gameObject.SetActive(true);
-                parent = parent.parent;
-            }
         }
 
         target.SetActive(visible);
